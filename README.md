@@ -1,123 +1,230 @@
-# Sui dApp Starter Template
+# Sui NFT Counter Application
 
-This dApp was created using `@mysten/create-dapp` that sets up a basic React
-Client dApp using the following tools:
+This project is an NFT minting application running on the Sui blockchain. Users can mint a limited number of NFTs (10 total) and each user can only mint once.
 
-- [React](https://react.dev/) as the UI framework
-- [TypeScript](https://www.typescriptlang.org/) for type checking
-- [Vite](https://vitejs.dev/) for build tooling
-- [Radix UI](https://www.radix-ui.com/) for pre-built UI components
-- [ESLint](https://eslint.org/) for linting
-- [`@mysten/dapp-kit`](https://sdk.mystenlabs.com/dapp-kit) for connecting to
-  wallets and loading data
-- [pnpm](https://pnpm.io/) for package management
+## 🚀 Features
 
-For a full guide on how to build this dApp from scratch, visit this
-[guide](http://docs.sui.io/guides/developer/app-examples/e2e-counter#frontend).
+- **Limited NFT Minting**: Maximum of 10 NFTs can be minted in total
+- **One NFT Per User**: Each wallet address can only mint once
+- **Mint Order Tracking**: Each NFT's mint order is permanently recorded
+- **Image Support**: Support for NFT image URLs
+- **Multi-Network**: Support for Devnet, Testnet, and Mainnet
+- **Real-time Updates**: Live NFT status tracking
+- **Modern UI**: Modern and user-friendly interface with Radix UI
 
-## Deploying your Move code
+## 🛠️ Technologies
 
-### Install Sui cli
+### Frontend
+- **React 18** - UI framework
+- **TypeScript** - Type safety
+- **Vite** - Build tool
+- **Radix UI** - UI components
+- **@mysten/dapp-kit** - Sui wallet integration
+- **TanStack Query** - Data management
 
-Before deploying your move code, ensure that you have installed the Sui CLI. You
-can follow the [Sui installation instruction](https://docs.sui.io/build/install)
-to get everything set up.
+### Backend (Smart Contract)
+- **Move** - Sui blockchain programming language
+- **Sui SDK** - Blockchain integration
 
-This template uses `testnet` by default, so we'll need to set up a testnet
-environment in the CLI:
+## 📋 Installation
+
+### Requirements
+
+- Node.js 18+
+- pnpm (recommended) or npm
+- Sui CLI
+
+### 1. Clone the Project
+
+```bash
+git clone <repo-url>
+cd sui-counter
+```
+
+### 2. Install Dependencies
+
+```bash
+pnpm install
+# or
+npm install
+```
+
+### 3. Sui CLI Setup
+
+Follow the [official documentation](https://docs.sui.io/build/install) to install the Sui CLI.
+
+Set up the testnet environment:
 
 ```bash
 sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
 sui client switch --env testnet
 ```
 
-If you haven't set up an address in the sui client yet, you can use the
-following command to get a new address:
+Create a new address:
 
 ```bash
 sui client new-address secp256k1
-```
-
-This well generate a new address and recover phrase for you. You can mark a
-newly created address as you active address by running the following command
-with your new address:
-
-```bash
 sui client switch --address 0xYOUR_ADDRESS...
 ```
 
-We can ensure we have some Sui in our new wallet by requesting Sui from the
-faucet `https://faucet.sui.io`.
+Get test tokens from [Sui Faucet](https://faucet.sui.io).
 
-### Publishing the move package
+## 🚀 Smart Contract Deployment
 
-The move code for this template is located in the `move` directory. To publish
-it, you can enter the `move` directory, and publish it with the Sui CLI:
+### 1. Publish the Move Package
 
 ```bash
 cd move
 sui client publish --gas-budget 100000000 counter
 ```
 
-In the output there will be an object with a `"packageId"` property. You'll want
-to save that package ID to the `src/constants.ts` file as `PACKAGE_ID`:
+### 2. Save the Package ID
 
-```ts
-export const TESTNET_COUNTER_PACKAGE_ID = "<YOUR_PACKAGE_ID>";
+Update the `packageId` from the deploy output in `src/constants.ts`:
+
+```typescript
+export const TESTNET_COUNTER_PACKAGE_ID = "0xYOUR_PACKAGE_ID";
 ```
 
-Now that we have published the move code, and update the package ID, we can
-start the app.
+### 3. Initialize the Supply Object
 
-## Starting your dApp
-
-To install dependencies you can run
+After first deployment, initialize the supply object:
 
 ```bash
-pnpm install
+sui client call --package YOUR_PACKAGE_ID --module counter --function init_supply --gas-budget 10000000
 ```
 
-To start your dApp in development mode run
+Update the created Supply object ID in `src/constants.ts`:
+
+```typescript
+export const TESTNET_SUPPLY_ID = "0xYOUR_SUPPLY_ID";
+```
+
+## 🎯 Running the Application
+
+### Development Mode
 
 ```bash
 pnpm dev
 ```
 
-## Building
-
-To build your app for deployment you can run
+### Production Build
 
 ```bash
 pnpm build
+pnpm preview
 ```
 
-## NFT Mintleme ve Kontrat Kullanımı
+## 📱 Usage
 
-### 1. Kontratı Deploy Et
+### 1. Wallet Connection
 
-- `move/counter/sources/counter.move` dosyasındaki kontratı Sui ağına deploy et.
-- Deploy sonrası oluşan packageId'yi not al.
+- Open the application
+- Click the "Connect Wallet" button in the top right corner
+- Select one of the supported wallets (Sui Wallet, Ethos, etc.)
 
-### 2. Supply Nesnesini Başlat
+### 2. NFT Minting
 
-- Sui CLI veya dApp ile `init_supply` fonksiyonunu bir kez çağır:
-  
-  ```
-  sui client call --package <packageId> --module counter --function init_supply --gas-budget 10000000
-  ```
-- Oluşan Supply objesinin ID'sini not al.
+- After wallet connection, the "Mint NFT" button appears
+- Click the button to start the minting process
+- Your NFT will be automatically displayed after transaction confirmation
 
-### 3. Frontend'de Mint İşlemi
+### 3. NFT Viewing
 
-- Uygulamada "NFT Mintle" butonuna tıklandığında Supply objesinin ID'si istenir.
-- Her adres sadece 1 kez mintleyebilir. Mint sırası NFT'de tutulur ve görsel URL'si olarak gösterilir.
-- Mintlenen NFT'nin bilgileri ve görseli ekranda görüntülenir.
+- The minted NFT's mint order, owner address, and image (if available) are displayed
+- NFT ID is stored as a hash in the URL (#nft_id)
+- You can share the direct link to show the NFT to others
 
-### 4. Hata Durumları
+## 🔧 Configuration
 
-- Bir adres ikinci kez mintlemeye çalışırsa hata mesajı gösterilir.
-- Mint limiti (10) dolduğunda mint işlemi engellenir.
+### Network Settings
 
-### 5. Görsel URL Formatı
+Settings for different networks in `src/constants.ts`:
 
-- NFT'nin görseli: `https://example.com/{mint_index}.png` şeklindedir. Kendi sunucunda bu görselleri sağlayabilirsin.
+```typescript
+// Devnet
+export const DEVNET_COUNTER_PACKAGE_ID = "0xYOUR_DEVNET_PACKAGE_ID";
+export const DEVNET_SUPPLY_ID = "0xYOUR_DEVNET_SUPPLY_ID";
+
+// Testnet  
+export const TESTNET_COUNTER_PACKAGE_ID = "0xYOUR_TESTNET_PACKAGE_ID";
+export const TESTNET_SUPPLY_ID = "0xYOUR_TESTNET_SUPPLY_ID";
+
+// Mainnet
+export const MAINNET_COUNTER_PACKAGE_ID = "0xYOUR_MAINNET_PACKAGE_ID";
+```
+
+### Network Configuration
+
+You can select the active network in `src/networkConfig.ts`.
+
+## 🔐 Smart Contract Details
+
+### Counter Module (`counter::counter`)
+
+#### Structures
+
+- **Supply**: Tracks total mint count and minters
+- **Nft**: Stores each NFT's owner and mint order information
+
+#### Functions
+
+- **init_supply()**: Initializes the supply object (called once)
+- **mint()**: Mints new NFT (within limits)
+- **get_nft_info()**: Reads NFT information
+
+#### Limits and Rules
+
+- **Maximum NFTs**: 10 total
+- **Per User Limit**: 1 NFT
+- **Mint Order**: Automatically incremented starting from 1
+
+## 📊 Error Codes
+
+- **100**: Mint limit exceeded (10 NFTs)
+- **101**: This address has already minted
+
+## 🎨 UI/UX Features
+
+- **Responsive Design**: Compatible with all devices
+- **Loading States**: Loading animations for transaction states
+- **Error Handling**: User-friendly error messages
+- **Success Feedback**: Notifications for successful transactions
+- **Dark Theme**: Modern dark theme
+
+## 🔍 Troubleshooting
+
+### "NFT not found" Error
+- Ensure the NFT ID in the URL is correct
+- Verify that the NFT was actually minted
+
+### "Invalid object structure" Error
+- Might be an NFT from an old contract version
+- Mint a new NFT
+
+### Mint Transaction Failed
+- Check your wallet balance (for gas fees)
+- You might have already minted before
+- The 10 NFT limit might have been reached
+
+## 📄 License
+
+This project is licensed under the Apache 2.0 License.
+
+## 🤝 Contributing
+
+1. Fork the project
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Create a Pull Request
+
+## 📞 Support
+
+For questions:
+- Use GitHub Issues
+- Join the [Sui Discord](https://discord.gg/sui) community
+
+---
+
+**Note**: This project is built upon Mysten Labs' Sui dApp template.
