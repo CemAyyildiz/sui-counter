@@ -1,16 +1,16 @@
-# Sui NFT Counter Application
+# 🎨 NFT Creator - Sui Blockchain
 
-This project is an NFT minting application running on the Sui blockchain. Users can mint a limited number of NFTs (10 total) and each user can only mint once.
+Modern bir NFT oluşturucu uygulaması. Kullanıcılar bilgisayarlarından görsel yükleyerek kendi NFT'lerini oluşturabilirler.
 
-## 🚀 Features
+## 🚀 Özellikler
 
-- **Limited NFT Minting**: Maximum of 10 NFTs can be minted in total
-- **One NFT Per User**: Each wallet address can only mint once
-- **Mint Order Tracking**: Each NFT's mint order is permanently recorded
-- **Image Support**: Support for NFT image URLs
-- **Multi-Network**: Support for Devnet, Testnet, and Mainnet
-- **Real-time Updates**: Live NFT status tracking
-- **Modern UI**: Modern and user-friendly interface with Radix UI
+- **Görsel Yükleme**: Bilgisayarınızdan drag & drop ile görsel yükleyin
+- **NFT Oluşturma**: Yüklediğiniz görseli NFT olarak mintleyin
+- **IPFS Entegrasyonu**: Görseller merkezi olmayan depolama sisteminde saklanır
+- **Cüzdan Entegrasyonu**: Sui cüzdan desteği
+- **Multi-Network**: Devnet, Testnet ve Mainnet desteği
+- **Gerçek Zamanlı**: Anlık NFT durumu takibi
+- **Modern UI**: Güzel ve kullanıcı dostu arayüz
 
 ## 🛠️ Technologies
 
@@ -19,12 +19,14 @@ This project is an NFT minting application running on the Sui blockchain. Users 
 - **TypeScript** - Type safety
 - **Vite** - Build tool
 - **Radix UI** - UI components
-- **@mysten/dapp-kit** - Sui wallet integration
+- **React Dropzone** - Dosya yükleme
+- **Lucide React** - Modern iconlar
+- **@mysten/dapp-kit** - Sui cüzdan entegrasyonu
 - **TanStack Query** - Data management
 
 ### Backend (Smart Contract)
-- **Move** - Sui blockchain programming language
-- **Sui SDK** - Blockchain integration
+- **Move** - Sui blockchain programlama dili
+- **Sui SDK** - Blockchain entegrasyonu
 
 ## 📋 Installation
 
@@ -34,7 +36,7 @@ This project is an NFT minting application running on the Sui blockchain. Users 
 - pnpm (recommended) or npm
 - Sui CLI
 
-### 1. Clone the Project
+### 1. Projeyi Klonlayın
 
 ```bash
 git clone <repo-url>

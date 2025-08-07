@@ -3,7 +3,7 @@ import { isValidSuiObjectId } from "@mysten/sui/utils";
 import { Box, Container, Flex, Heading } from "@radix-ui/themes";
 import { useState } from "react";
 import { NftInfo } from "./Counter";
-import { MintNft } from "./CreateCounter";
+import { NFTMinter } from "./NFTMinter";
 
 function App() {
   const currentAccount = useCurrentAccount();
@@ -30,7 +30,13 @@ function App() {
         }}
       >
         <Box>
-          <Heading>dApp Starter Template</Heading>
+          <Heading style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent"
+          }}>
+            🎨 NFT Creator
+          </Heading>
         </Box>
 
         <Box>
@@ -48,15 +54,35 @@ function App() {
             nftId ? (
               <NftInfo id={nftId} onOldCounter={handleOldCounter} />
             ) : (
-              <MintNft
-                onCreated={(id) => {
+              <NFTMinter
+                onMinted={(id) => {
                   window.location.hash = id;
                   setNftId(id);
                 }}
               />
             )
           ) : (
-            <Heading>Please connect your wallet</Heading>
+            <Flex 
+              direction="column" 
+              align="center" 
+              justify="center" 
+              gap="4"
+              style={{ 
+                minHeight: "60vh",
+                textAlign: "center"
+              }}
+            >
+              <div style={{ fontSize: "64px", marginBottom: "16px" }}>🔐</div>
+              <Heading size="6" style={{ marginBottom: "8px" }}>
+                Cüzdanınızı Bağlayın
+              </Heading>
+              <Heading size="3" color="gray" weight="regular">
+                NFT oluşturmak için önce cüzdanınızı bağlamanız gerekiyor
+              </Heading>
+              <Box mt="4">
+                <ConnectButton />
+              </Box>
+            </Flex>
           )}
         </Container>
       </Container>

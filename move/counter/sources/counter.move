@@ -1,58 +1,96 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Bu kontrat en fazla 10 adet NFT mintlenmesine izin verir. Her NFT'nin üzerinde mint sırası ve sahibi yazılıdır.
-module counter::counter {
+/// NFT Minting Kontratı - Kullanıcılar görsel yükleyerek NFT mintleyebilir
+module nft_minter::nft_minter {
     use sui::object::{UID, new};
     use sui::tx_context::{TxContext, sender};
     use sui::transfer;
-    use std::vector;
+    use std::string::{String};
+    use sui::display;
+    use sui::package;
 
-    /// Toplam mintlenen NFT sayısını ve mintleyen adresleri tutan struct
-    public struct Supply has key {
+    /// NFT Collection struct'ı
+    public struct NFTCollection has key {
         id: UID,
-        count: u64,
-        minters: vector<address>,
+        name: String,
+        description: String,
+        total_supply: u64,
     }
 
-    /// NFT struct'ı
-    public struct Nft has key, store {
+    /// NFT struct'ı - görsel URL'si ile
+    public struct ImageNFT has key, store {
         id: UID,
-        owner: address,
-        mint_index: u64,
+        name: String,
+        description: String,
+        image_url: String,
+        creator: address,
+        mint_timestamp: u64,
     }
 
-    /// Supply objesini başlat (ilk deployda çağrılır)
-    public fun init_supply(ctx: &mut TxContext) {
-        transfer::share_object(Supply {
+    /// One-time witness for creating display
+    public struct NFT_MINTER has drop {}
+
+    /// Module initializer
+    fun init(otw: NFT_MINTER, ctx: &mut TxContext) {
+        // Create and share collection object
+        let collection = NFTCollection {
             id: new(ctx),
-            count: 0,
-            minters: vector::empty<address>(),
-        })
+            name: b"Image NFT Collection".to_string(),
+            description: b"A collection of user-uploaded image NFTs".to_string(),
+            total_supply: 0,
+        };
+        transfer::share_object(collection);
+
+        // Create display object for NFTs
+        let publisher = package::claim(otw, ctx);
+        let mut display = display::new<ImageNFT>(&publisher, ctx);
+        
+        display::add(&mut display, b"name".to_string(), b"{name}".to_string());
+        display::add(&mut display, b"description".to_string(), b"{description}".to_string());
+        display::add(&mut display, b"image_url".to_string(), b"{image_url}".to_string());
+        display::add(&mut display, b"creator".to_string(), b"{creator}".to_string());
+        
+        display::update_version(&mut display);
+        
+        transfer::public_transfer(publisher, sender(ctx));
+        transfer::public_transfer(display, sender(ctx));
     }
 
-    /// NFT mintle (en fazla 10 adet, her adres sadece 1 kez)
-    public fun mint(supply: &mut Supply, ctx: &mut TxContext) {
-        assert!(supply.count < 10, 100);
+    /// Görsel NFT mintleme fonksiyonu
+    public entry fun mint_image_nft(
+        collection: &mut NFTCollection,
+        name: String,
+        description: String, 
+        image_url: String,
+        ctx: &mut TxContext
+    ) {
         let sender_addr = sender(ctx);
-        let mut i = 0;
-        let minters_ref = &supply.minters;
-        while (i < vector::length(minters_ref)) {
-            assert!(vector::borrow(minters_ref, i) != sender_addr, 101);
-            i = i + 1;
-        }
-        ; supply.count = supply.count + 1;
-        let mint_index = supply.count;
-        vector::push_back(&mut supply.minters, sender_addr);
-        transfer::transfer(Nft {
+        
+        // Create NFT
+        let nft = ImageNFT {
             id: new(ctx),
-            owner: sender_addr,
-            mint_index,
-        }, sender_addr);
+            name,
+            description,
+            image_url,
+            creator: sender_addr,
+            mint_timestamp: sui::tx_context::epoch_timestamp_ms(ctx),
+        };
+        
+        // Update collection supply
+        collection.total_supply = collection.total_supply + 1;
+        
+        // Transfer NFT to creator
+        transfer::public_transfer(nft, sender_addr);
     }
 
-    /// NFT'nin üzerindeki mint sırasını ve sahibini oku
-    public fun get_nft_info(nft: &Nft): (address, u64) {
-        (nft.owner, nft.mint_index)
+    /// NFT bilgilerini oku
+    public fun get_nft_info(nft: &ImageNFT): (String, String, String, address, u64) {
+        (nft.name, nft.description, nft.image_url, nft.creator, nft.mint_timestamp)
+    }
+
+    /// Collection bilgilerini oku  
+    public fun get_collection_info(collection: &NFTCollection): (String, String, u64) {
+        (collection.name, collection.description, collection.total_supply)
     }
 }
