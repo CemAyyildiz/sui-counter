@@ -1,19 +1,12 @@
 import {
-  useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSuiClient,
   useSuiClientQuery,
 } from "@mysten/dapp-kit";
 import type { SuiObjectData } from "@mysten/sui/client";
-import { Transaction } from "@mysten/sui/transactions";
 import { Button, Flex, Heading, Text, Card, Box } from "@radix-ui/themes";
-import { useNetworkVariable } from "./networkConfig";
-import { useState } from "react";
 import { Calendar, User, Hash, Image as ImageIcon } from "lucide-react";
 import ClipLoader from "react-spinners/ClipLoader";
 
 export function NftInfo({ id, onOldCounter }: { id: string, onOldCounter?: () => void }) {
-  const counterPackageId = useNetworkVariable("counterPackageId");
   const { data, isPending, error } = useSuiClientQuery("getObject", {
     id,
     options: {

@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { Button, Flex, Heading, Text, TextField, TextArea, Card, Box } from "@radix-ui/themes";
 import { Upload, Image as ImageIcon, Loader2, CheckCircle, AlertCircle } from "lucide-react";
@@ -15,6 +15,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
   const currentAccount = useCurrentAccount();
   const counterPackageId = useNetworkVariable("counterPackageId");
   const collectionId = useNetworkVariable("collectionId");
+  const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -121,12 +122,8 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     
     const tx = new Transaction();
     
-    // Test için geçici collection ID (gerçek deploy sonrası güncellenecek)
-    let finalCollectionId = collectionId;
-    if (collectionId === "0xTODO") {
-      // Test için geçici bir ID kullan - deploy sonrası gerçek ID ile değiştirilecek
-      finalCollectionId = "0x1"; // Bu deploy sonrası gerçek collection ID ile değiştirilmeli
-    }
+    // Collection ID'yi kullan (artık deploy edilmiş durumda)
+    const finalCollectionId = collectionId;
     
     tx.moveCall({
       target: `${counterPackageId}::nft_minter::mint_image_nft`,
@@ -143,11 +140,34 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
         transaction: tx,
       },
       {
-        onSuccess: (result) => {
+        onSuccess: async (result) => {
           console.log("NFT minted successfully!", result);
-          const nftId = result.effects?.created?.[0]?.reference?.objectId;
-          if (nftId && onMinted) {
-            onMinted(nftId);
+          try {
+            // Transaction'ı bekle ve created object'leri al
+            const txResult = await suiClient.waitForTransaction({
+              digest: result.digest,
+              options: {
+                showEffects: true,
+                showObjectChanges: true,
+              },
+            });
+            
+            // Created object'lerden NFT'yi bul
+            const createdNFT = txResult.effects?.created?.find((obj: any) => 
+              obj.owner && typeof obj.owner === 'object' && 'AddressOwner' in obj.owner
+            );
+            
+            if (createdNFT && onMinted) {
+              onMinted(createdNFT.reference.objectId);
+            } else if (onMinted) {
+              // Fallback olarak transaction digest'ini kullan
+              onMinted(result.digest);
+            }
+          } catch (error) {
+            console.error("Error getting NFT ID:", error);
+            if (onMinted) {
+              onMinted(result.digest);
+            }
           }
           // Reset form
           setSelectedFile(null);
