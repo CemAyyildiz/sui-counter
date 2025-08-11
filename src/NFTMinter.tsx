@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
@@ -53,7 +53,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     maxSize: 10 * 1024 * 1024 // 10MB
   });
 
-  const createPixelArt = async (file: File): Promise<string> => {
+  const createPixelArt = useCallback(async (file: File): Promise<string> => {
     setIsPixelating(true);
     try {
       return new Promise((resolve, reject) => {
@@ -70,8 +70,9 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
           // Orijinal görsel boyutları (şu anda kullanılmıyor ama gelecekte gerekebilir)
           
           // Pixel art için küçük boyut (16x16, 32x32, 64x64)
-          const pixelWidth = pixelSize;
-          const pixelHeight = pixelSize;
+          const currentPixelSize = pixelSize; // Güncel pixel boyutunu kullan
+          const pixelWidth = currentPixelSize;
+          const pixelHeight = currentPixelSize;
           
           canvas.width = pixelWidth;
           canvas.height = pixelHeight;
@@ -135,7 +136,32 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     } finally {
       setIsPixelating(false);
     }
-  };
+  }, [pixelSize]); // pixelSize dependency'si eklendi
+
+  // Pixel boyutu değiştiğinde otomatik olarak pixel art'ı yeniden oluştur
+  const regeneratePixelArt = useCallback(async () => {
+    if (!selectedFile) return;
+    
+    try {
+      setIsPixelating(true);
+      const pixelatedUrl = await createPixelArt(selectedFile);
+      setPixelatedImageUrl(pixelatedUrl);
+      setPixelatedPreview(pixelatedUrl);
+      setPixelStatus('success');
+    } catch (error) {
+      console.error('Pixel art regeneration failed:', error);
+      setPixelStatus('error');
+    } finally {
+      setIsPixelating(false);
+    }
+  }, [selectedFile, createPixelArt]);
+
+  // Pixel boyutu değiştiğinde veya yeni görsel yüklendiğinde otomatik olarak yeniden oluştur
+  useEffect(() => {
+    if (selectedFile) {
+      regeneratePixelArt();
+    }
+  }, [pixelSize, selectedFile, regeneratePixelArt]);
 
   const handlePixelate = async () => {
     if (!selectedFile) return;
@@ -288,7 +314,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
       </Card>
 
       {/* Pixel Size Selection */}
-      {selectedFile && pixelStatus === 'idle' && (
+      {selectedFile && (
         <Card style={{ padding: "20px" }}>
           <Flex direction="column" gap="3">
             <Text size="3" weight="medium" align="center">
@@ -301,6 +327,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
                   variant={pixelSize === size ? "solid" : "outline"}
                   size="2"
                   onClick={() => setPixelSize(size)}
+                  disabled={isPixelating}
                   style={{
                     background: pixelSize === size ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" : "transparent",
                     border: pixelSize === size ? "none" : "1px solid #e1e5e9",
@@ -312,8 +339,14 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
               ))}
             </Flex>
             <Text size="1" color="gray" align="center">
-              Daha küçük boyut = daha pixelated görünüm
+              {pixelStatus === 'success' ? 'Boyutu değiştirerek farklı pixel art efektlerini deneyin!' : 'Daha küçük boyut = daha pixelated görünüm'}
             </Text>
+            {pixelStatus === 'success' && isPixelating && (
+              <Flex align="center" justify="center" gap="2" style={{ color: "#667eea" }}>
+                <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                <Text size="1">Yeni boyut oluşturuluyor...</Text>
+              </Flex>
+            )}
           </Flex>
         </Card>
       )}
