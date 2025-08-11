@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { Button, Flex, Heading, Text, TextField, TextArea, Card, Box } from "@radix-ui/themes";
-import { Upload, Image as ImageIcon, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, Palette } from "lucide-react";
 import { useNetworkVariable } from "./networkConfig";
 import ClipLoader from "react-spinners/ClipLoader";
 
@@ -20,12 +20,14 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [pixelatedPreview, setPixelatedPreview] = useState<string | null>(null);
   const [nftName, setNftName] = useState("");
   const [nftDescription, setNftDescription] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
+  const [isPixelating, setIsPixelating] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [imageUrl, setImageUrl] = useState<string>("");
+  const [pixelStatus, setPixelStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [pixelatedImageUrl, setPixelatedImageUrl] = useState<string>("");
+  const [pixelSize, setPixelSize] = useState(16); // Pixel boyutu (8, 16, 32, 64)
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -34,9 +36,11 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
       const reader = new FileReader();
       reader.onload = () => {
         setImagePreview(reader.result as string);
+        setPixelatedPreview(null);
+        setPixelStatus('idle');
+        setPixelatedImageUrl("");
       };
       reader.readAsDataURL(file);
-      setUploadStatus('idle');
     }
   }, []);
 
@@ -49,47 +53,78 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     maxSize: 10 * 1024 * 1024 // 10MB
   });
 
-  const uploadToIPFS = async (file: File): Promise<string> => {
-    setIsUploading(true);
+  const createPixelArt = async (file: File): Promise<string> => {
+    setIsPixelating(true);
     try {
-      // Görsel boyutunu küçültmek için canvas kullanarak resize yapalım
       return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           
-          // Maksimum boyutları belirle (küçük boyut = küçük base64)
-          const MAX_WIDTH = 200;
-          const MAX_HEIGHT = 200;
+          if (!ctx) {
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+
+          // Orijinal görsel boyutları (şu anda kullanılmıyor ama gelecekte gerekebilir)
           
-          let { width, height } = img;
+          // Pixel art için küçük boyut (16x16, 32x32, 64x64)
+          const pixelWidth = pixelSize;
+          const pixelHeight = pixelSize;
           
-          // Orantılı olarak boyutlandır
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = (height * MAX_WIDTH) / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = (width * MAX_HEIGHT) / height;
-              height = MAX_HEIGHT;
+          canvas.width = pixelWidth;
+          canvas.height = pixelHeight;
+          
+          // Görseli canvas'a çiz ve pixel art efekti uygula
+          ctx.imageSmoothingEnabled = false; // Pixel art için smooth'u kapat
+          ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
+          
+          // Şimdi büyük boyutta göster (pixel'ları belirgin yap)
+          const displayCanvas = document.createElement('canvas');
+          const displayCtx = displayCanvas.getContext('2d');
+          
+          if (!displayCtx) {
+            reject(new Error('Display canvas context not available'));
+            return;
+          }
+          
+          // Display canvas'ı büyük yap (pixel'ları görmek için)
+          // 16KB limit için daha küçük boyut kullan
+          const displaySize = 128; // 256'dan 128'e düşürdük
+          displayCanvas.width = displaySize;
+          displayCanvas.height = displaySize;
+          
+          // Smooth'u kapat ve pixel art'ı büyüt
+          displayCtx.imageSmoothingEnabled = false;
+          displayCtx.drawImage(canvas, 0, 0, displaySize, displaySize);
+          
+          // Base64'e çevir - JPEG formatında düşük kalite ile boyutu azalt
+          const base64 = displayCanvas.toDataURL('image/jpeg', 0.5); // %50 kalite
+          
+          // Boyut kontrolü - 16KB limitini aşmamak için
+          if (base64.length > 16000) { // 16KB'dan biraz küçük tutuyoruz
+            // Daha da küçük boyut ve kalite ile tekrar dene
+            const smallCanvas = document.createElement('canvas');
+            const smallCtx = smallCanvas.getContext('2d');
+            
+            if (smallCtx) {
+              const smallSize = 64; // 64x64 boyutuna düşür
+              smallCanvas.width = smallSize;
+              smallCanvas.height = smallSize;
+              
+              smallCtx.imageSmoothingEnabled = false;
+              smallCtx.drawImage(canvas, 0, 0, smallSize, smallSize);
+              
+              const smallBase64 = smallCanvas.toDataURL('image/jpeg', 0.3); // %30 kalite
+              resolve(smallBase64);
+              return;
             }
           }
           
-          canvas.width = width;
-          canvas.height = height;
-          
-          // Görseli canvas'a çiz
-          ctx?.drawImage(img, 0, 0, width, height);
-          
-          // Base64'e çevir (JPEG formatında, düşük kalite)
-          const base64 = canvas.toDataURL('image/jpeg', 0.3); // %30 kalite
-          
           setTimeout(() => {
             resolve(base64);
-          }, 2000); // 2 saniye bekleme simülasyonu
+          }, 1000); // 1 saniye bekleme simülasyonu
         };
         
         img.onerror = () => reject(new Error('Görsel yüklenemedi'));
@@ -98,25 +133,26 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     } catch (error) {
       throw error;
     } finally {
-      setIsUploading(false);
+      setIsPixelating(false);
     }
   };
 
-  const handleUpload = async () => {
+  const handlePixelate = async () => {
     if (!selectedFile) return;
     
     try {
-      const url = await uploadToIPFS(selectedFile);
-      setImageUrl(url);
-      setUploadStatus('success');
+      const pixelatedUrl = await createPixelArt(selectedFile);
+      setPixelatedImageUrl(pixelatedUrl);
+      setPixelatedPreview(pixelatedUrl);
+      setPixelStatus('success');
     } catch (error) {
-      console.error('Upload failed:', error);
-      setUploadStatus('error');
+      console.error('Pixelation failed:', error);
+      setPixelStatus('error');
     }
   };
 
   const handleMint = async () => {
-    if (!currentAccount || !imageUrl || !nftName.trim()) return;
+    if (!currentAccount || !pixelatedImageUrl || !nftName.trim()) return;
 
     setIsMinting(true);
     
@@ -130,8 +166,8 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
       arguments: [
         tx.object(finalCollectionId),
         tx.pure.string(nftName),
-        tx.pure.string(nftDescription || "Kullanıcı tarafından yüklenen NFT"),
-        tx.pure.string(imageUrl),
+        tx.pure.string(nftDescription || "Kullanıcı tarafından oluşturulan Pixel Art NFT"),
+        tx.pure.string(pixelatedImageUrl),
       ],
     });
 
@@ -172,10 +208,11 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
           // Reset form
           setSelectedFile(null);
           setImagePreview(null);
+          setPixelatedPreview(null);
           setNftName("");
           setNftDescription("");
-          setImageUrl("");
-          setUploadStatus('idle');
+          setPixelatedImageUrl("");
+          setPixelStatus('idle');
         },
         onError: (error) => {
           console.error("Minting failed:", error);
@@ -188,18 +225,18 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
   };
 
   return (
-    <Flex direction="column" gap="6" style={{ maxWidth: 600, margin: "0 auto", padding: "24px" }}>
+    <Flex direction="column" gap="6" style={{ maxWidth: 800, margin: "0 auto", padding: "24px" }}>
       <Heading size="6" align="center" style={{ 
         background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
         WebkitBackgroundClip: "text",
         WebkitTextFillColor: "transparent",
         marginBottom: "8px"
       }}>
-        🎨 NFT Oluşturucu
+        🎨 Pixel Art NFT Oluşturucu
       </Heading>
       
       <Text size="3" align="center" color="gray" style={{ marginBottom: "24px" }}>
-        Görselinizi yükleyin ve benzersiz NFT'nizi oluşturun
+        Görselinizi yükleyin ve pixel art NFT'nizi oluşturun
       </Text>
 
       {/* File Upload Area */}
@@ -243,55 +280,126 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
                 {isDragActive ? "Görseli buraya bırakın" : "Görsel yüklemek için tıklayın veya sürükleyin"}
               </Text>
               <Text size="2" color="gray">
-                PNG, JPG, GIF desteklenir (otomatik olarak küçültülür)
+                PNG, JPG, GIF desteklenir
               </Text>
             </Flex>
           )}
         </div>
       </Card>
 
-      {/* Upload to IPFS */}
-      {selectedFile && uploadStatus === 'idle' && (
+      {/* Pixel Size Selection */}
+      {selectedFile && pixelStatus === 'idle' && (
+        <Card style={{ padding: "20px" }}>
+          <Flex direction="column" gap="3">
+            <Text size="3" weight="medium" align="center">
+              🎯 Pixel Boyutu Seçin
+            </Text>
+            <Flex justify="center" gap="2">
+              {[8, 16, 32, 64].map((size) => (
+                <Button
+                  key={size}
+                  variant={pixelSize === size ? "solid" : "outline"}
+                  size="2"
+                  onClick={() => setPixelSize(size)}
+                  style={{
+                    background: pixelSize === size ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" : "transparent",
+                    border: pixelSize === size ? "none" : "1px solid #e1e5e9",
+                    color: pixelSize === size ? "white" : "#667eea"
+                  }}
+                >
+                  {size}x{size}
+                </Button>
+              ))}
+            </Flex>
+            <Text size="1" color="gray" align="center">
+              Daha küçük boyut = daha pixelated görünüm
+            </Text>
+          </Flex>
+        </Card>
+      )}
+
+      {/* Create Pixel Art Button */}
+      {selectedFile && pixelStatus === 'idle' && (
         <Button 
-          onClick={handleUpload}
-          disabled={isUploading}
+          onClick={handlePixelate}
+          disabled={isPixelating}
           size="3"
           style={{ 
             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
             border: "none"
           }}
         >
-          {isUploading ? (
+          {isPixelating ? (
             <>
               <Loader2 size={16} style={{ animation: "spin 1s linear infinite", marginRight: "8px" }} />
-              Yükleniyor...
+              Pixel Art Oluşturuluyor...
             </>
           ) : (
             <>
-              <Upload size={16} style={{ marginRight: "8px" }} />
-              IPFS'e Yükle
+              <Palette size={16} style={{ marginRight: "8px" }} />
+              Pixel Oluştur
             </>
           )}
         </Button>
       )}
 
-      {/* Upload Status */}
-      {uploadStatus === 'success' && (
+      {/* Pixelation Status */}
+      {pixelStatus === 'success' && (
         <Flex align="center" justify="center" gap="2" style={{ color: "#10b981" }}>
           <CheckCircle size={16} />
-          <Text size="2">Görsel başarıyla yüklendi!</Text>
+          <Text size="2">Pixel art başarıyla oluşturuldu!</Text>
         </Flex>
       )}
 
-      {uploadStatus === 'error' && (
+      {pixelStatus === 'error' && (
         <Flex align="center" justify="center" gap="2" style={{ color: "#ef4444" }}>
           <AlertCircle size={16} />
-          <Text size="2">Yükleme başarısız. Tekrar deneyin.</Text>
+          <Text size="2">Pixel art oluşturulamadı. Tekrar deneyin.</Text>
         </Flex>
+      )}
+
+      {/* Pixel Art Preview */}
+      {pixelStatus === 'success' && pixelatedPreview && (
+        <Card style={{ padding: "24px" }}>
+          <Flex direction="column" gap="4">
+            <Text size="4" weight="medium" align="center" color="indigo">
+              🎨 NFT Önizlemesi
+            </Text>
+            <Flex justify="center" gap="6" wrap="wrap">
+              <Flex direction="column" align="center" gap="2">
+                <Text size="2" color="gray">Orijinal Görsel</Text>
+                <img 
+                  src={imagePreview!} 
+                  alt="Original" 
+                  style={{ 
+                    width: "120px", 
+                    height: "120px", 
+                    borderRadius: "8px",
+                    objectFit: "cover"
+                  }} 
+                />
+              </Flex>
+              <Flex direction="column" align="center" gap="2">
+                <Text size="2" color="gray">Pixel Art NFT</Text>
+                <img 
+                  src={pixelatedPreview} 
+                  alt="Pixelated" 
+                  style={{ 
+                    width: "120px", 
+                    height: "120px", 
+                    borderRadius: "8px",
+                    objectFit: "cover"
+                  }} 
+                />
+                <Text size="1" color="gray">{pixelSize}x{pixelSize} → 128x128 (16KB limit)</Text>
+              </Flex>
+            </Flex>
+          </Flex>
+        </Card>
       )}
 
       {/* NFT Metadata Form */}
-      {uploadStatus === 'success' && (
+      {pixelStatus === 'success' && (
         <Card style={{ padding: "24px" }}>
           <Flex direction="column" gap="4">
             <Box>
@@ -299,7 +407,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
                 NFT Adı *
               </Text>
               <TextField.Root
-                placeholder="Örn: Güzel Manzara #1"
+                placeholder="Örn: Pixel Manzara #1"
                 value={nftName}
                 onChange={(e) => setNftName(e.target.value)}
                 size="3"
@@ -337,7 +445,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
               ) : (
                 <>
                   <ImageIcon size={16} style={{ marginRight: "8px" }} />
-                  NFT Oluştur
+                  Pixel Art NFT Oluştur
                 </>
               )}
             </Button>
@@ -355,13 +463,19 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
             1. Bilgisayarınızdan bir görsel seçin
           </Text>
           <Text size="2" color="gray">
-            2. Görsel otomatik olarak küçültülüp optimize edilir
+            2. Pixel boyutunu seçin (8x8, 16x16, 32x32, 64x64)
           </Text>
           <Text size="2" color="gray">
-            3. NFT bilgilerini doldurun
+            3. "Pixel Oluştur" butonuna tıklayın
           </Text>
           <Text size="2" color="gray">
-            4. NFT'nizi oluşturun ve cüzdanınıza alın!
+            4. Görsel otomatik olarak 16KB limitine uygun hale getirilir
+          </Text>
+          <Text size="2" color="gray">
+            5. NFT bilgilerini doldurun
+          </Text>
+          <Text size="2" color="gray">
+            6. Pixel art NFT'nizi oluşturun ve cüzdanınıza alın!
           </Text>
         </Flex>
       </Card>
