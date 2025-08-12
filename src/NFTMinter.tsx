@@ -5,7 +5,9 @@ import { Transaction } from "@mysten/sui/transactions";
 import { Button, Flex, Heading, Text, TextField, TextArea, Card, Box } from "@radix-ui/themes";
 import { Upload, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, Palette } from "lucide-react";
 import { useNetworkVariable } from "./networkConfig";
+import { getWorkingIpfsUrl } from "./constants";
 import ClipLoader from "react-spinners/ClipLoader";
+import { SmartImage } from "./components/SmartImage";
 
 interface NFTMinterProps {
   onMinted?: (nftId: string) => void;
@@ -26,8 +28,8 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
   const [isPixelating, setIsPixelating] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
   const [pixelStatus, setPixelStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [pixelatedImageUrl, setPixelatedImageUrl] = useState<string>("");
-  const [pixelSize, setPixelSize] = useState(16); // Pixel boyutu (8, 16, 32, 64)
+  const [pixelatedImageHash, setPixelatedImageHash] = useState<string>("");
+  const [pixelSize] = useState(64); // Sabit 64x64 pixel boyutu
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -38,7 +40,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
         setImagePreview(reader.result as string);
         setPixelatedPreview(null);
         setPixelStatus('idle');
-        setPixelatedImageUrl("");
+        setPixelatedImageHash("");
       };
       reader.readAsDataURL(file);
     }
@@ -100,32 +102,41 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
           displayCtx.imageSmoothingEnabled = false;
           displayCtx.drawImage(canvas, 0, 0, displaySize, displaySize);
           
-          // Base64'e çevir - JPEG formatında düşük kalite ile boyutu azalt
-          const base64 = displayCanvas.toDataURL('image/jpeg', 0.5); // %50 kalite
-          
-          // Boyut kontrolü - 16KB limitini aşmamak için
-          if (base64.length > 16000) { // 16KB'dan biraz küçük tutuyoruz
-            // Daha da küçük boyut ve kalite ile tekrar dene
-            const smallCanvas = document.createElement('canvas');
-            const smallCtx = smallCanvas.getContext('2d');
-            
-            if (smallCtx) {
-              const smallSize = 64; // 64x64 boyutuna düşür
-              smallCanvas.width = smallSize;
-              smallCanvas.height = smallSize;
-              
-              smallCtx.imageSmoothingEnabled = false;
-              smallCtx.drawImage(canvas, 0, 0, smallSize, smallSize);
-              
-              const smallBase64 = smallCanvas.toDataURL('image/jpeg', 0.3); // %30 kalite
-              resolve(smallBase64);
+          // Canvas'ı blob'a çevir ve Pinata'ya yükle
+          displayCanvas.toBlob(async (blob) => {
+            if (!blob) {
+              reject(new Error('Failed to create blob'));
               return;
             }
-          }
-          
-          setTimeout(() => {
-            resolve(base64);
-          }, 1000); // 1 saniye bekleme simülasyonu
+
+            try {
+              // Pinata'ya yükle
+              const formData = new FormData();
+              formData.append('file', blob, `pixel-art-${pixelSize}x${pixelSize}.png`);
+              
+              // Pinata API endpoint (testnet için)
+              const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${import.meta.env.VITE_PINATA_JWT || 'YOUR_PINATA_JWT_TOKEN'}`
+                },
+                body: formData
+              });
+
+              if (!response.ok) {
+                throw new Error(`Pinata upload failed: ${response.statusText}`);
+              }
+
+              const result = await response.json();
+              // Store just the IPFS hash, not the full gateway URL
+              const ipfsHash = result.IpfsHash;
+              
+              resolve(ipfsHash);
+            } catch (error) {
+              console.error('Pinata upload error:', error);
+              reject(error);
+            }
+          }, 'image/png', 0.9); // PNG formatında %90 kalite
         };
         
         img.onerror = () => reject(new Error('Görsel yüklenemedi'));
@@ -136,7 +147,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     } finally {
       setIsPixelating(false);
     }
-  }, [pixelSize]); // pixelSize dependency'si eklendi
+  }, []); // pixelSize artık sabit olduğu için dependency'ye gerek yok
 
   // Pixel boyutu değiştiğinde otomatik olarak pixel art'ı yeniden oluştur
   const regeneratePixelArt = useCallback(async () => {
@@ -145,8 +156,8 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     try {
       setIsPixelating(true);
       const pixelatedUrl = await createPixelArt(selectedFile);
-      setPixelatedImageUrl(pixelatedUrl);
-      setPixelatedPreview(pixelatedUrl);
+      setPixelatedImageHash(pixelatedUrl);
+      setPixelatedPreview(getWorkingIpfsUrl(pixelatedUrl));
       setPixelStatus('success');
     } catch (error) {
       console.error('Pixel art regeneration failed:', error);
@@ -156,20 +167,20 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     }
   }, [selectedFile, createPixelArt]);
 
-  // Pixel boyutu değiştiğinde veya yeni görsel yüklendiğinde otomatik olarak yeniden oluştur
+  // Yeni görsel yüklendiğinde otomatik olarak pixel art oluştur
   useEffect(() => {
     if (selectedFile) {
       regeneratePixelArt();
     }
-  }, [pixelSize, selectedFile, regeneratePixelArt]);
+  }, [selectedFile, regeneratePixelArt]);
 
   const handlePixelate = async () => {
     if (!selectedFile) return;
     
     try {
       const pixelatedUrl = await createPixelArt(selectedFile);
-      setPixelatedImageUrl(pixelatedUrl);
-      setPixelatedPreview(pixelatedUrl);
+      setPixelatedImageHash(pixelatedUrl);
+      setPixelatedPreview(getWorkingIpfsUrl(pixelatedUrl));
       setPixelStatus('success');
     } catch (error) {
       console.error('Pixelation failed:', error);
@@ -178,7 +189,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
   };
 
   const handleMint = async () => {
-    if (!currentAccount || !pixelatedImageUrl || !nftName.trim()) return;
+    if (!currentAccount || !pixelatedImageHash || !nftName.trim()) return;
 
     setIsMinting(true);
     
@@ -187,15 +198,15 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     // Collection ID'yi kullan (artık deploy edilmiş durumda)
     const finalCollectionId = collectionId;
     
-    tx.moveCall({
-      target: `${counterPackageId}::nft_minter::mint_image_nft`,
-      arguments: [
-        tx.object(finalCollectionId),
-        tx.pure.string(nftName),
-        tx.pure.string(nftDescription || "Kullanıcı tarafından oluşturulan Pixel Art NFT"),
-        tx.pure.string(pixelatedImageUrl),
-      ],
-    });
+            tx.moveCall({
+          target: `${counterPackageId}::nft_minter::mint_image_nft`,
+          arguments: [
+            tx.object(finalCollectionId),
+            tx.pure.string(nftName),
+            tx.pure.string(nftDescription || "Kullanıcı tarafından oluşturulan Pixel Art NFT"),
+            tx.pure.string(getWorkingIpfsUrl(pixelatedImageHash)),
+          ],
+        });
 
     signAndExecute(
       {
@@ -237,7 +248,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
           setPixelatedPreview(null);
           setNftName("");
           setNftDescription("");
-          setPixelatedImageUrl("");
+          setPixelatedImageHash("");
           setPixelStatus('idle');
         },
         onError: (error) => {
@@ -448,7 +459,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
                 overflow: "hidden",
                 boxShadow: "0 20px 40px rgba(0,0,0,0.15)"
               }}>
-                <img 
+                <SmartImage 
                   src={imagePreview} 
                   alt="Preview" 
                   style={{ 
@@ -478,7 +489,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
                 Image selected successfully
               </Text>
               <Text size="1" color="gray" style={{ 
-                background: "rgba(102, 126, 234, 0.1)",
+                background: "rgba(102, 234, 126, 0.1)",
                 padding: "4px 12px",
                 borderRadius: "12px",
                 fontFamily: "monospace"
@@ -513,70 +524,35 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
         </div>
       </Card>
 
-      {/* Pixel Size Selection with Premium Design */}
+      {/* Fixed Pixel Size Info */}
       {selectedFile && (
         <Card style={{ 
-          padding: "28px", 
+          padding: "24px", 
           background: "linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%)",
           border: "1px solid rgba(16, 185, 129, 0.1)",
           borderRadius: "20px",
           boxShadow: "0 20px 60px rgba(16, 185, 129, 0.1)"
         }}>
-          <Flex direction="column" gap="4">
+          <Flex direction="column" align="center" gap="3">
             <Text size="4" weight="medium" align="center" style={{ 
               color: "#10b981",
               marginBottom: "8px"
             }}>
-              🎯 Choose Pixel Resolution
+              🎯 Pixel Art Resolution
             </Text>
-            <Flex justify="center" gap="3" wrap="wrap">
-              {[8, 16, 32, 64].map((size) => (
-                <Button
-                  key={size}
-                  variant={pixelSize === size ? "solid" : "outline"}
-                  size="3"
-                  onClick={() => setPixelSize(size)}
-                  disabled={isPixelating}
-                  style={{
-                    background: pixelSize === size 
-                      ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" 
-                      : "transparent",
-                    border: pixelSize === size 
-                      ? "none" 
-                      : "2px solid rgba(16, 185, 129, 0.3)",
-                    color: pixelSize === size ? "white" : "#10b981",
-                    borderRadius: "12px",
-                    padding: "12px 20px",
-                    fontWeight: "600",
-                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                    boxShadow: pixelSize === size 
-                      ? "0 8px 24px rgba(16, 185, 129, 0.3)" 
-                      : "0 4px 12px rgba(16, 185, 129, 0.1)",
-                    transform: pixelSize === size ? "translateY(-2px)" : "none"
-                  }}
-                >
-                  {size}x{size}
-                </Button>
-              ))}
+            <Flex align="center" gap="2" style={{
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              padding: "12px 20px",
+              borderRadius: "25px",
+              boxShadow: "0 8px 24px rgba(16, 185, 129, 0.3)"
+            }}>
+              <Text size="3" weight="bold" style={{ color: "white" }}>
+                64x64 → 128x128
+              </Text>
             </Flex>
             <Text size="2" color="gray" align="center" style={{ marginTop: "8px" }}>
-              {pixelStatus === 'success' 
-                ? '🎨 Try different sizes to see various pixel art effects!' 
-                : '💡 Smaller sizes create more pixelated, retro-style artwork'
-              }
+              💡 Fixed 64x64 resolution for consistent pixel art quality
             </Text>
-            {pixelStatus === 'success' && isPixelating && (
-              <Flex align="center" justify="center" gap="2" style={{ 
-                color: "#10b981",
-                marginTop: "12px",
-                padding: "12px",
-                background: "rgba(16, 185, 129, 0.1)",
-                borderRadius: "12px"
-              }}>
-                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
-                <Text size="2" weight="medium">Generating new pixel art...</Text>
-              </Flex>
-            )}
           </Flex>
         </Card>
       )}
@@ -667,7 +643,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
                   boxShadow: "0 16px 32px rgba(0,0,0,0.15)",
                   border: "3px solid rgba(139, 92, 246, 0.1)"
                 }}>
-                  <img 
+                  <SmartImage 
                     src={imagePreview!} 
                     alt="Original" 
                     style={{ 
@@ -690,7 +666,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
                   border: "3px solid rgba(139, 92, 246, 0.2)",
                   position: "relative"
                 }}>
-                  <img 
+                  <SmartImage 
                     src={pixelatedPreview} 
                     alt="Pixelated" 
                     style={{ 
@@ -699,22 +675,22 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
                       objectFit: "cover"
                     }} 
                   />
-                  <div style={{
-                    position: "absolute",
-                    bottom: "8px",
-                    left: "8px",
-                    right: "8px",
-                    background: "rgba(139, 92, 246, 0.9)",
-                    color: "white",
-                    padding: "4px 8px",
-                    borderRadius: "8px",
-                    fontSize: "10px",
-                    fontWeight: "600",
-                    textAlign: "center",
-                    backdropFilter: "blur(10px)"
-                  }}>
-                    {pixelSize}x{pixelSize} → 128x128
-                  </div>
+                                     <div style={{
+                     position: "absolute",
+                     bottom: "8px",
+                     left: "8px",
+                     right: "8px",
+                     background: "rgba(139, 92, 246, 0.9)",
+                     color: "white",
+                     padding: "4px 8px",
+                     borderRadius: "8px",
+                     fontSize: "10px",
+                     fontWeight: "600",
+                     textAlign: "center",
+                     backdropFilter: "blur(10px)"
+                   }}>
+                     64x64 → 128x128
+                   </div>
                 </div>
                 <Text size="1" color="gray" style={{ 
                   background: "rgba(139, 92, 246, 0.1)",
@@ -833,9 +809,9 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
           <Flex direction="column" gap="3">
             {[
               "1. Upload your image from your computer",
-              "2. Choose pixel resolution (8x8 to 64x64)",
+              "2. Fixed 64x64 pixel resolution for consistent quality",
               "3. Click 'Create Pixel Art' to generate",
-              "4. Image is automatically optimized for 16KB limit",
+              "4. Image is automatically optimized for IPFS storage",
               "5. Fill in NFT details and mint on Sui blockchain"
             ].map((step, index) => (
               <Flex key={index} align="center" gap="3">

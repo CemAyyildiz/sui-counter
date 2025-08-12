@@ -5,6 +5,7 @@ import type { SuiObjectData } from "@mysten/sui/client";
 import { Button, Flex, Heading, Text, Card, Box } from "@radix-ui/themes";
 import { Calendar, User, Hash, Image as ImageIcon } from "lucide-react";
 import ClipLoader from "react-spinners/ClipLoader";
+import { SmartImage } from "./components/SmartImage";
 
 export function NftInfo({ id, onOldCounter }: { id: string, onOldCounter?: () => void }) {
   const { data, isPending, error } = useSuiClientQuery("getObject", {
@@ -86,7 +87,7 @@ export function NftInfo({ id, onOldCounter }: { id: string, onOldCounter?: () =>
 
           {fields?.image_url && (
             <Box style={{ position: "relative", marginBottom: "24px" }}>
-              <img
+              <SmartImage
                 src={fields.image_url}
                 alt={fields?.name || `NFT`}
                 style={{ 
@@ -96,23 +97,8 @@ export function NftInfo({ id, onOldCounter }: { id: string, onOldCounter?: () =>
                   borderRadius: "12px",
                   boxShadow: "0 8px 32px rgba(0,0,0,0.1)"
                 }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                  const errorDiv = document.getElementById("img-error");
-                  if (errorDiv) errorDiv.style.display = "block";
-                }}
+                fallbackIcon={<ImageIcon size={48} />}
               />
-              <div id="img-error" style={{ 
-                display: "none", 
-                color: "#ef4444", 
-                textAlign: "center",
-                padding: "60px 20px",
-                border: "2px dashed #ef4444",
-                borderRadius: "12px"
-              }}>
-                <ImageIcon size={48} style={{ margin: "0 auto 16px", display: "block" }} />
-                Görsel yüklenemedi
-              </div>
             </Box>
           )}
 
