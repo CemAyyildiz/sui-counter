@@ -5,7 +5,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { Button, Flex, Heading, Text, TextField, TextArea, Card, Box } from "@radix-ui/themes";
 import { Upload, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, Palette } from "lucide-react";
 import { useNetworkVariable } from "./networkConfig";
-import { getWorkingIpfsUrl } from "./constants";
+import { getWorkingIpfsUrl, isPinataConfigured } from "./constants";
 import ClipLoader from "react-spinners/ClipLoader";
 import { SmartImage } from "./components/SmartImage";
 
@@ -158,18 +158,26 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
 
   const uploadBlobToIPFS = async (blob: Blob, filename: string, resolve: (value: string) => void, reject: (reason?: any) => void) => {
     try {
+      // Check if Pinata is properly configured
+      if (!isPinataConfigured()) {
+        throw new Error('Pinata JWT token is not configured. Please set VITE_PINATA_JWT in your environment variables.');
+      }
+
       const formData = new FormData();
       formData.append('file', blob, filename);
       
       const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_PINATA_JWT || 'YOUR_PINATA_JWT_TOKEN'}`
+          'Authorization': `Bearer ${import.meta.env.VITE_PINATA_JWT}`
         },
         body: formData
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Pinata authentication failed. Please check your JWT token.');
+        }
         throw new Error(`Pinata upload failed: ${response.statusText}`);
       }
 
@@ -199,6 +207,32 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
       throw error;
     }
   }, [uploadToIPFS]);
+
+  // Show configuration warning if Pinata is not configured
+  const renderConfigurationWarning = () => {
+    if (!isPinataConfigured()) {
+      return (
+        <Card style={{ marginBottom: '1rem', border: '1px solid #f56565', backgroundColor: '#fed7d7' }}>
+          <Box p="3">
+            <Flex align="center" gap="2" style={{ marginBottom: '0.5rem' }}>
+              <AlertCircle size={20} color="#e53e3e" />
+              <Heading size="3" style={{ color: '#c53030' }}>Configuration Required</Heading>
+            </Flex>
+            <Text size="2" style={{ color: '#742a2a' }}>
+              To use NFT minting, you need to configure Pinata IPFS. Create a <code>.env</code> file in your project root with:
+            </Text>
+            <Box mt="2" p="2" style={{ backgroundColor: '#fff', borderRadius: '4px', fontFamily: 'monospace' }}>
+              VITE_PINATA_JWT=your_jwt_token_here
+            </Box>
+            <Text size="2" style={{ color: '#742a2a', marginTop: '0.5rem' }}>
+              Get your JWT token from <a href="https://app.pinata.cloud/developers/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: '#3182ce' }}>Pinata Dashboard</a>
+            </Text>
+          </Box>
+        </Card>
+      );
+    }
+    return null;
+  };
 
   const loadImageFromUrl = useCallback(async (url: string): Promise<File> => {
     setIsUrlLoading(true);
@@ -512,6 +546,9 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
         }}>
           Transform your images into stunning pixel art NFTs on the Sui blockchain
         </Text>
+
+        {/* Configuration Warning */}
+        {renderConfigurationWarning()}
 
         {/* Logo Section */}
         <Flex align="center" gap="8" style={{ marginTop: "24px" }}>

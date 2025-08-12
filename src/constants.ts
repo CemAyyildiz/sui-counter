@@ -19,10 +19,16 @@ export const MAINNET_COUNTER_PACKAGE_ID = "0xTODO"; // Mainnet için publish son
 
 // Pinata IPFS Configuration
 export const PINATA_CONFIG = {
-  JWT_TOKEN: import.meta.env.VITE_PINATA_JWT || 'YOUR_PINATA_JWT_TOKEN',
+  JWT_TOKEN: import.meta.env.VITE_PINATA_JWT || '',
   API_URL: 'https://api.pinata.cloud/pinning/pinFileToIPFS',
   GATEWAY_URL: 'https://gateway.pinata.cloud/ipfs/',
   PINATA_PIN_URL: 'https://api.pinata.cloud/pinning/pinFileToIPFS'
+};
+
+// Check if Pinata is properly configured
+export const isPinataConfigured = (): boolean => {
+  const token = import.meta.env.VITE_PINATA_JWT;
+  return Boolean(token && token !== 'YOUR_PINATA_JWT_TOKEN' && token.trim() !== '');
 };
 
 // Multiple IPFS gateways for fallback
