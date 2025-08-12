@@ -922,37 +922,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
       )}
 
       {/* Fixed Pixel Size Info */}
-      {selectedFile && (
-        <Card style={{ 
-          padding: "24px", 
-          background: "linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%)",
-          border: "1px solid rgba(16, 185, 129, 0.1)",
-          borderRadius: "20px",
-          boxShadow: "0 20px 60px rgba(16, 185, 129, 0.1)"
-        }}>
-          <Flex direction="column" align="center" gap="3">
-            <Text size="4" weight="medium" align="center" style={{ 
-              color: "#10b981",
-              marginBottom: "8px"
-            }}>
-              🎯 Pixel Art Resolution
-            </Text>
-            <Flex align="center" gap="2" style={{
-              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-              padding: "12px 20px",
-              borderRadius: "25px",
-              boxShadow: "0 8px 24px rgba(16, 185, 129, 0.3)"
-            }}>
-              <Text size="3" weight="bold" style={{ color: "white" }}>
-                64x64 → 128x128
-              </Text>
-            </Flex>
-            <Text size="2" color="gray" align="center" style={{ marginTop: "8px" }}>
-              💡 Fixed 64x64 resolution for consistent pixel art quality
-            </Text>
-          </Flex>
-        </Card>
-      )}
+
 
       {/* Create Pixel Art Button with Premium Design */}
       {selectedFile && pixelStatus === 'idle' && (
@@ -986,19 +956,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
         </Button>
       )}
 
-      {/* Status Messages with Premium Design */}
-      {pixelStatus === 'success' && (
-        <Flex align="center" justify="center" gap="3" style={{ 
-          color: "#10b981",
-          padding: "16px 24px",
-          background: "linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)",
-          borderRadius: "16px",
-          border: "1px solid rgba(16, 185, 129, 0.2)"
-        }}>
-          <CheckCircle size={20} />
-          <Text size="3" weight="medium">Pixel art created successfully!</Text>
-        </Flex>
-      )}
+
 
       {pixelStatus === 'error' && (
         <Flex align="center" justify="center" gap="3" style={{ 
