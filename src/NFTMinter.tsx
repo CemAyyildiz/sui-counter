@@ -780,19 +780,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
               >
                 Nature Photo
               </Button>
-              <Button
-                size="2"
-                variant="outline"
-                style={{
-                  border: "1px solid rgba(102, 126, 234, 0.3)",
-                  borderRadius: "8px",
-                  padding: "6px 12px",
-                  fontSize: "12px"
-                }}
-                onClick={() => setImageUrl('https://via.placeholder.com/400x400/667eea/ffffff?text=Test+Image')}
-              >
-                Placeholder
-              </Button>
+
               <Button
                 size="2"
                 variant="outline"
@@ -1229,11 +1217,11 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
           </Text>
           <Flex direction="column" gap="3">
             {[
-              "1. Upload your image from your computer",
-              "2. Fixed 64x64 pixel resolution for consistent quality",
-              "3. Click 'Create Pixel Art' to generate",
-              "4. Image is automatically optimized for IPFS storage",
-              "5. Fill in NFT details and mint on Sui blockchain"
+              "1. Upload an image from your computer or enter an image URL",
+              "2. Choose between original image or pixel art NFT",
+              "3. For pixel art: Click 'Create Pixel Art' to generate 64x64 → 128x128",
+              "4. Images are automatically optimized and stored on IPFS",
+              "5. Fill in NFT name and description, then mint on Sui blockchain"
             ].map((step, index) => (
               <Flex key={index} align="center" gap="3">
                 <div style={{
