@@ -30,11 +30,28 @@ function App() {
         }}
       >
         <Box>
-          <Heading style={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent"
-          }}>
+          <Heading 
+            style={{
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              cursor: "pointer",
+              transition: "all 0.3s ease",
+              userSelect: "none"
+            }}
+            onClick={() => {
+              window.location.hash = "";
+              setNftId(null);
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.05)";
+              e.currentTarget.style.filter = "brightness(1.1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.filter = "brightness(1)";
+            }}
+          >
             🎨 NFT Creator
           </Heading>
         </Box>

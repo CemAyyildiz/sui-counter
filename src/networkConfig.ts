@@ -1,8 +1,8 @@
 import { getFullnodeUrl } from "@mysten/sui/client";
 import {
-  DEVNET_COUNTER_PACKAGE_ID,
-  TESTNET_COUNTER_PACKAGE_ID,
-  MAINNET_COUNTER_PACKAGE_ID,
+  DEVNET_NFT_PACKAGE_ID,
+  TESTNET_NFT_PACKAGE_ID,
+  MAINNET_NFT_PACKAGE_ID,
   DEVNET_COLLECTION_ID,
   TESTNET_COLLECTION_ID,
   MAINNET_COLLECTION_ID,
@@ -14,7 +14,7 @@ const { networkConfig, useNetworkVariable, useNetworkVariables } =
     devnet: {
       url: getFullnodeUrl("devnet"),
       variables: {
-        counterPackageId: DEVNET_COUNTER_PACKAGE_ID,
+        counterPackageId: DEVNET_NFT_PACKAGE_ID,
         collectionId: DEVNET_COLLECTION_ID,
         network: "devnet" as const,
       },
@@ -22,7 +22,7 @@ const { networkConfig, useNetworkVariable, useNetworkVariables } =
     testnet: {
       url: getFullnodeUrl("testnet"),
       variables: {
-        counterPackageId: TESTNET_COUNTER_PACKAGE_ID,
+        counterPackageId: TESTNET_NFT_PACKAGE_ID,
         collectionId: TESTNET_COLLECTION_ID,
         network: "testnet" as const,
       },
@@ -30,7 +30,7 @@ const { networkConfig, useNetworkVariable, useNetworkVariables } =
     mainnet: {
       url: getFullnodeUrl("mainnet"),
       variables: {
-        counterPackageId: MAINNET_COUNTER_PACKAGE_ID,
+        counterPackageId: MAINNET_NFT_PACKAGE_ID,
         collectionId: MAINNET_COLLECTION_ID,
         network: "mainnet" as const,
       },
