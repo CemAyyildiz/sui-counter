@@ -32,6 +32,9 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
   const [originalImageHash, setOriginalImageHash] = useState<string>("");
   const [pixelSize] = useState(64); // Sabit 64x64 pixel boyutu
   const [mintMode, setMintMode] = useState<'original' | 'pixelated'>('original');
+  const [uploadMode, setUploadMode] = useState<'select' | 'file' | 'url'>('select');
+  const [imageUrl, setImageUrl] = useState<string>("");
+  const [isUrlLoading, setIsUrlLoading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -197,6 +200,60 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     }
   }, [uploadToIPFS]);
 
+  const loadImageFromUrl = useCallback(async (url: string): Promise<File> => {
+    setIsUrlLoading(true);
+    
+    try {
+      console.log(`🔄 Attempting to load image from: ${url}`);
+      
+      // Sadece direkt URL'yi dene (proxy olmadan)
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'image/*,*/*;q=0.8',
+        },
+        mode: 'cors' // CORS'u dene
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Dosya boyutunu kontrol et
+      if (blob.size === 0) {
+        throw new Error('Image file is empty (0 bytes)');
+      }
+      
+      // Resim formatını kontrol et
+      if (!blob.type.startsWith('image/')) {
+        throw new Error('URL does not point to a valid image');
+      }
+      
+      // Dosya adını belirle
+      const fileName = url.split('/').pop()?.split('?')[0] || 'image-from-url';
+      const fileExtension = blob.type.split('/')[1] || 'jpg';
+      
+      const file = new File([blob], `${fileName}.${fileExtension}`, { type: blob.type });
+      console.log(`✅ Successfully loaded image: ${file.name} (${blob.size} bytes)`);
+      return file;
+      
+    } catch (error) {
+      console.error('Image loading error:', error);
+      
+      // CORS hatası ise özel mesaj
+      if (error instanceof Error && error.message.includes('CORS')) {
+        throw new Error('CORS_ERROR: This image cannot be loaded due to cross-origin restrictions');
+      }
+      
+      throw error;
+    } finally {
+      setIsUrlLoading(false);
+    }
+  }, []);
+
 
   // Pixel boyutu değiştiğinde otomatik olarak pixel art'ı yeniden oluştur
   const regeneratePixelArt = useCallback(async () => {
@@ -234,6 +291,87 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     } catch (error) {
       console.error('Pixelation failed:', error);
       setPixelStatus('error');
+    }
+  };
+
+  const handleUrlSubmit = async () => {
+    if (!imageUrl.trim()) return;
+    
+    try {
+      // Google Görseller URL'lerini temizle
+      let cleanUrl = imageUrl.trim();
+      
+      // Google Görseller URL'lerini işle
+      if (cleanUrl.includes('google.com') && cleanUrl.includes('imgres')) {
+        // Google Görseller URL'den gerçek resim URL'sini çıkar
+        const imgUrlMatch = cleanUrl.match(/imgurl=([^&]+)/);
+        if (imgUrlMatch) {
+          cleanUrl = decodeURIComponent(imgUrlMatch[1]);
+          console.log('Extracted Google Images URL:', cleanUrl);
+        }
+      }
+      
+      // Pinterest URL'lerini işle
+      if (cleanUrl.includes('pinterest.com')) {
+        cleanUrl = cleanUrl.replace('/pin/', '/pin/').split('?')[0];
+      }
+      
+      // Instagram URL'lerini işle
+      if (cleanUrl.includes('instagram.com')) {
+        cleanUrl = cleanUrl.split('?')[0] + '?__a=1&__d=1';
+      }
+      
+      const file = await loadImageFromUrl(cleanUrl);
+      setSelectedFile(file);
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImagePreview(reader.result as string);
+        setPixelatedPreview(null);
+        setPixelStatus('idle');
+        setPixelatedImageHash("");
+        setOriginalImageHash("");
+      };
+      reader.readAsDataURL(file);
+      
+      // Upload mode'u file'a çevir
+      setUploadMode('file');
+    } catch (error) {
+      console.error('URL image loading failed:', error);
+      
+      // Daha detaylı hata mesajı
+      let errorMessage = 'Failed to load image from URL.\n\n';
+      
+              if (error instanceof Error) {
+          if (error.message.includes('CORS_ERROR')) {
+            errorMessage += '❌ CORS Error: This website blocks external image loading.\n\n';
+            errorMessage += '💡 Solutions:\n';
+            errorMessage += '• Try the test URLs below (they work!)\n';
+            errorMessage += '• Download the image to your computer first\n';
+            errorMessage += '• Use public CDN links (Unsplash, Pexels, etc.)\n';
+            errorMessage += '• Copy the direct image URL (ending with .jpg, .png)';
+          } else if (error.message.includes('HTTP')) {
+            errorMessage += `❌ HTTP Error: ${error.message}\n\n`;
+            errorMessage += '💡 Solutions:\n';
+            errorMessage += '• Check if the URL is correct\n';
+            errorMessage += '• Try the test URLs below\n';
+            errorMessage += '• Use public CDN links';
+          } else if (error.message.includes('empty') || error.message.includes('0 bytes')) {
+            errorMessage += '❌ Empty Image: The image file is empty or corrupted.\n\n';
+            errorMessage += '💡 Solutions:\n';
+            errorMessage += '• Try the test URLs below (they work!)\n';
+            errorMessage += '• Use a different image URL\n';
+            errorMessage += '• Download the image to your computer first';
+          } else {
+            errorMessage += `❌ Error: ${error.message}\n\n`;
+            errorMessage += '💡 Solutions:\n';
+            errorMessage += '• Try the test URLs below\n';
+            errorMessage += '• Download the image to your computer first\n';
+            errorMessage += '• Use public CDN links';
+          }
+        }
+      
+      alert(errorMessage);
     }
   };
 
@@ -496,28 +634,206 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
         </Text>
       </Flex>
 
+      {/* Upload Mode Selection */}
+      {!imagePreview && (
+        <Card style={{ 
+          padding: "24px", 
+          background: "linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%)",
+          border: "1px solid rgba(16, 185, 129, 0.1)",
+          borderRadius: "20px",
+          boxShadow: "0 20px 60px rgba(16, 185, 129, 0.1)",
+          marginBottom: "24px"
+        }}>
+          <Flex direction="column" gap="4">
+            <Text size="4" weight="medium" align="center" style={{ 
+              color: "#10b981",
+              marginBottom: "8px"
+            }}>
+              📤 Choose Upload Method
+            </Text>
+            <Flex justify="center" gap="4" wrap="wrap">
+              <Button
+                variant={uploadMode === 'file' ? 'solid' : 'outline'}
+                style={{
+                  background: uploadMode === 'file' 
+                    ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
+                    : 'transparent',
+                  color: uploadMode === 'file' ? 'white' : '#10b981',
+                  border: `2px solid ${uploadMode === 'file' ? '#10b981' : '#10b981'}`,
+                  borderRadius: '12px',
+                  padding: '12px 24px',
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease'
+                }}
+                onClick={() => setUploadMode('file')}
+              >
+                💾 Upload from Computer
+              </Button>
+              <Button
+                variant={uploadMode === 'url' ? 'solid' : 'outline'}
+                style={{
+                  background: uploadMode === 'url' 
+                    ? 'linear-gradient(135deg, #667eea 0%, #7c3aed 100%)' 
+                    : 'transparent',
+                  color: uploadMode === 'url' ? 'white' : '#667eea',
+                  border: `2px solid ${uploadMode === 'url' ? '#667eea' : '#667eea'}`,
+                  borderRadius: '12px',
+                  padding: '12px 24px',
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease'
+                }}
+                onClick={() => setUploadMode('url')}
+              >
+                🌐 Load from URL
+              </Button>
+            </Flex>
+          </Flex>
+        </Card>
+      )}
+
+      {/* URL Input Area */}
+      {uploadMode === 'url' && !imagePreview && (
+        <Card style={{ 
+          padding: "24px", 
+          background: "linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)",
+          border: "1px solid rgba(102, 126, 234, 0.1)",
+          borderRadius: "20px",
+          boxShadow: "0 20px 60px rgba(102, 126, 234, 0.1)",
+          marginBottom: "24px"
+        }}>
+          <Flex direction="column" gap="4">
+            <Text size="4" weight="medium" align="center" style={{ 
+              color: "#667eea",
+              marginBottom: "8px"
+            }}>
+              🌐 Enter Image URL
+            </Text>
+            <Flex gap="3" style={{ maxWidth: "600px", margin: "0 auto" }}>
+              <TextField.Root
+                placeholder="https://example.com/image.jpg"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                size="3"
+                style={{
+                  flex: 1,
+                  borderRadius: "12px",
+                  border: "2px solid rgba(102, 126, 234, 0.2)",
+                  transition: "all 0.3s ease"
+                }}
+              />
+              <Button
+                onClick={handleUrlSubmit}
+                disabled={!imageUrl.trim() || isUrlLoading}
+                size="3"
+                style={{
+                  background: "linear-gradient(135deg, #667eea 0%, #7c3aed 100%)",
+                  border: "none",
+                  borderRadius: "12px",
+                  padding: "12px 24px",
+                  fontWeight: "600",
+                  transition: "all 0.3s ease"
+                }}
+              >
+                {isUrlLoading ? (
+                  <>
+                    <ClipLoader size={16} color="#fff" style={{ marginRight: "8px" }} />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon size={16} style={{ marginRight: "8px" }} />
+                    Load Image
+                  </>
+                )}
+              </Button>
+            </Flex>
+            <Text size="2" color="gray" align="center" style={{ marginTop: "8px" }}>
+              Enter a direct image URL (JPG, PNG, GIF, WEBP supported)
+            </Text>
+            <Text size="1" color="orange" align="center" style={{ marginTop: "4px", fontStyle: "italic" }}>
+              ⚠️ Note: Some websites block external image loading due to CORS restrictions
+            </Text>
+            <Flex justify="center" gap="2" wrap="wrap" style={{ marginTop: "12px" }}>
+              <Button
+                size="2"
+                variant="outline"
+                style={{
+                  border: "1px solid rgba(102, 126, 234, 0.3)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "12px"
+                }}
+                onClick={() => setImageUrl('https://picsum.photos/400/400')}
+              >
+                Random Image
+              </Button>
+              <Button
+                size="2"
+                variant="outline"
+                style={{
+                  border: "1px solid rgba(102, 126, 234, 0.3)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "12px"
+                }}
+                onClick={() => setImageUrl('https://images.pexels.com/photos/2014422/pexels-photo-2014422.jpeg?auto=compress&cs=tinysrgb&w=400')}
+              >
+                Nature Photo
+              </Button>
+              <Button
+                size="2"
+                variant="outline"
+                style={{
+                  border: "1px solid rgba(102, 126, 234, 0.3)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "12px"
+                }}
+                onClick={() => setImageUrl('https://via.placeholder.com/400x400/667eea/ffffff?text=Test+Image')}
+              >
+                Placeholder
+              </Button>
+              <Button
+                size="2"
+                variant="outline"
+                style={{
+                  border: "1px solid rgba(102, 126, 234, 0.3)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "12px"
+                }}
+                onClick={() => setImageUrl('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop')}
+              >
+                Unsplash
+              </Button>
+            </Flex>
+          </Flex>
+        </Card>
+      )}
+
       {/* File Upload Area with Premium Design */}
-      <Card style={{ 
-        padding: "32px", 
-        background: "linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)",
-        border: "1px solid rgba(102, 126, 234, 0.1)",
-        borderRadius: "20px",
-        boxShadow: "0 20px 60px rgba(102, 126, 234, 0.1)"
-      }}>
-        <div
-          {...getRootProps()}
-          style={{
-            border: `2px dashed ${isDragActive ? '#667eea' : 'rgba(102, 126, 234, 0.3)'}`,
-            borderRadius: "16px",
-            padding: "48px 24px",
-            textAlign: "center",
-            cursor: "pointer",
-            backgroundColor: isDragActive ? "rgba(102, 126, 234, 0.08)" : "rgba(102, 126, 234, 0.02)",
-            transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-            position: "relative",
-            overflow: "hidden"
-          }}
-        >
+      {uploadMode === 'file' && (
+        <Card style={{ 
+          padding: "32px", 
+          background: "linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)",
+          border: "1px solid rgba(102, 126, 234, 0.1)",
+          borderRadius: "20px",
+          boxShadow: "0 20px 60px rgba(102, 126, 234, 0.1)"
+        }}>
+          <div
+            {...getRootProps()}
+            style={{
+              border: `2px dashed ${isDragActive ? '#667eea' : 'rgba(102, 126, 234, 0.3)'}`,
+              borderRadius: "16px",
+              padding: "48px 24px",
+              textAlign: "center",
+              cursor: "pointer",
+              backgroundColor: isDragActive ? "rgba(102, 126, 234, 0.08)" : "rgba(102, 126, 234, 0.02)",
+              transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+              position: "relative",
+              overflow: "hidden"
+            }}
+          >
           {/* Animated Background Pattern */}
           <div style={{
             position: "absolute",
@@ -602,7 +918,8 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
             </Flex>
           )}
         </div>
-      </Card>
+        </Card>
+      )}
 
       {/* Fixed Pixel Size Info */}
       {selectedFile && (
