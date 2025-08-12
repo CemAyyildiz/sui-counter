@@ -29,7 +29,9 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
   const [isMinting, setIsMinting] = useState(false);
   const [pixelStatus, setPixelStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [pixelatedImageHash, setPixelatedImageHash] = useState<string>("");
+  const [originalImageHash, setOriginalImageHash] = useState<string>("");
   const [pixelSize] = useState(64); // Sabit 64x64 pixel boyutu
+  const [mintMode, setMintMode] = useState<'original' | 'pixelated'>('original');
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -41,6 +43,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
         setPixelatedPreview(null);
         setPixelStatus('idle');
         setPixelatedImageHash("");
+        setOriginalImageHash("");
       };
       reader.readAsDataURL(file);
     }
@@ -55,8 +58,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
     maxSize: 10 * 1024 * 1024 // 10MB
   });
 
-  const createPixelArt = useCallback(async (file: File): Promise<string> => {
-    setIsPixelating(true);
+  const uploadToIPFS = useCallback(async (file: File, isPixelated: boolean = false): Promise<string> => {
     try {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -69,74 +71,78 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
             return;
           }
 
-          // Orijinal görsel boyutları (şu anda kullanılmıyor ama gelecekte gerekebilir)
-          
-          // Pixel art için küçük boyut (16x16, 32x32, 64x64)
-          const currentPixelSize = pixelSize; // Güncel pixel boyutunu kullan
-          const pixelWidth = currentPixelSize;
-          const pixelHeight = currentPixelSize;
-          
-          canvas.width = pixelWidth;
-          canvas.height = pixelHeight;
-          
-          // Görseli canvas'a çiz ve pixel art efekti uygula
-          ctx.imageSmoothingEnabled = false; // Pixel art için smooth'u kapat
-          ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
-          
-          // Şimdi büyük boyutta göster (pixel'ları belirgin yap)
-          const displayCanvas = document.createElement('canvas');
-          const displayCtx = displayCanvas.getContext('2d');
-          
-          if (!displayCtx) {
-            reject(new Error('Display canvas context not available'));
-            return;
-          }
-          
-          // Display canvas'ı büyük yap (pixel'ları görmek için)
-          // 16KB limit için daha küçük boyut kullan
-          const displaySize = 128; // 256'dan 128'e düşürdük
-          displayCanvas.width = displaySize;
-          displayCanvas.height = displaySize;
-          
-          // Smooth'u kapat ve pixel art'ı büyüt
-          displayCtx.imageSmoothingEnabled = false;
-          displayCtx.drawImage(canvas, 0, 0, displaySize, displaySize);
-          
-          // Canvas'ı blob'a çevir ve Pinata'ya yükle
-          displayCanvas.toBlob(async (blob) => {
-            if (!blob) {
-              reject(new Error('Failed to create blob'));
+          if (isPixelated) {
+            // Pixel art için küçük boyut
+            const currentPixelSize = pixelSize;
+            const pixelWidth = currentPixelSize;
+            const pixelHeight = currentPixelSize;
+            
+            canvas.width = pixelWidth;
+            canvas.height = pixelHeight;
+            
+            // Görseli canvas'a çiz ve pixel art efekti uygula
+            ctx.imageSmoothingEnabled = false; // Pixel art için smooth'u kapat
+            ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
+            
+            // Şimdi büyük boyutta göster (pixel'ları belirgin yap)
+            const displayCanvas = document.createElement('canvas');
+            const displayCtx = displayCanvas.getContext('2d');
+            
+            if (!displayCtx) {
+              reject(new Error('Display canvas context not available'));
               return;
             }
-
-            try {
-              // Pinata'ya yükle
-              const formData = new FormData();
-              formData.append('file', blob, `pixel-art-${pixelSize}x${pixelSize}.png`);
-              
-              // Pinata API endpoint (testnet için)
-              const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${import.meta.env.VITE_PINATA_JWT || 'YOUR_PINATA_JWT_TOKEN'}`
-                },
-                body: formData
-              });
-
-              if (!response.ok) {
-                throw new Error(`Pinata upload failed: ${response.statusText}`);
+            
+            // Display canvas'ı büyük yap (pixel'ları görmek için)
+            const displaySize = 128; // 16KB limit için optimize
+            displayCanvas.width = displaySize;
+            displayCanvas.height = displaySize;
+            
+            // Smooth'u kapat ve pixel art'ı büyüt
+            displayCtx.imageSmoothingEnabled = false;
+            displayCtx.drawImage(canvas, 0, 0, displaySize, displaySize);
+            
+            // Canvas'ı blob'a çevir ve IPFS'e yükle
+            displayCanvas.toBlob(async (blob) => {
+              if (!blob) {
+                reject(new Error('Failed to create blob'));
+                return;
               }
-
-              const result = await response.json();
-              // Store just the IPFS hash, not the full gateway URL
-              const ipfsHash = result.IpfsHash;
-              
-              resolve(ipfsHash);
-            } catch (error) {
-              console.error('Pinata upload error:', error);
-              reject(error);
+              await uploadBlobToIPFS(blob, `pixel-art-${pixelSize}x${pixelSize}.png`, resolve, reject);
+            }, 'image/png', 0.9);
+          } else {
+            // Orijinal resim için - kaliteli şekilde
+            const maxSize = 1024; // Maksimum boyut
+            let { width, height } = img;
+            
+            // Aspect ratio'yu koru
+            if (width > maxSize || height > maxSize) {
+              if (width > height) {
+                height = (height * maxSize) / width;
+                width = maxSize;
+              } else {
+                width = (width * maxSize) / height;
+                height = maxSize;
+              }
             }
-          }, 'image/png', 0.9); // PNG formatında %90 kalite
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Yüksek kalitede çiz
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Canvas'ı blob'a çevir ve IPFS'e yükle
+            canvas.toBlob(async (blob) => {
+              if (!blob) {
+                reject(new Error('Failed to create blob'));
+                return;
+              }
+              await uploadBlobToIPFS(blob, `original-${file.name}`, resolve, reject);
+            }, 'image/jpeg', 0.95); // Yüksek kalite JPEG
+          }
         };
         
         img.onerror = () => reject(new Error('Görsel yüklenemedi'));
@@ -144,10 +150,53 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
       });
     } catch (error) {
       throw error;
+    }
+  }, [pixelSize]);
+
+  const uploadBlobToIPFS = async (blob: Blob, filename: string, resolve: (value: string) => void, reject: (reason?: any) => void) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', blob, filename);
+      
+      const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_PINATA_JWT || 'YOUR_PINATA_JWT_TOKEN'}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`Pinata upload failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      resolve(result.IpfsHash);
+    } catch (error) {
+      console.error('IPFS upload error:', error);
+      reject(error);
+    }
+  };
+
+  const createPixelArt = useCallback(async (file: File): Promise<string> => {
+    setIsPixelating(true);
+    try {
+      return await uploadToIPFS(file, true);
+    } catch (error) {
+      throw error;
     } finally {
       setIsPixelating(false);
     }
-  }, []); // pixelSize artık sabit olduğu için dependency'ye gerek yok
+  }, [uploadToIPFS]);
+
+  const uploadOriginalImage = useCallback(async (file: File): Promise<string> => {
+    try {
+      return await uploadToIPFS(file, false);
+    } catch (error) {
+      throw error;
+    }
+  }, [uploadToIPFS]);
+
 
   // Pixel boyutu değiştiğinde otomatik olarak pixel art'ı yeniden oluştur
   const regeneratePixelArt = useCallback(async () => {
@@ -189,7 +238,38 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
   };
 
   const handleMint = async () => {
-    if (!currentAccount || !pixelatedImageHash || !nftName.trim()) return;
+    if (!currentAccount || !nftName.trim()) return;
+    
+    // Mint mode'a göre hangi resmi kullanacağımızı belirle
+    let imageHash = "";
+    let imageDescription = "";
+    
+    if (mintMode === 'original') {
+      if (!originalImageHash) {
+        // Orijinal resmi henüz yüklemediyse yükle
+        try {
+          const hash = await uploadOriginalImage(selectedFile!);
+          setOriginalImageHash(hash);
+          imageHash = hash;
+          imageDescription = "Kullanıcı tarafından yüklenen orijinal görsel NFT";
+        } catch (error) {
+          console.error('Original image upload failed:', error);
+          return;
+        }
+      } else {
+        imageHash = originalImageHash;
+        imageDescription = "Kullanıcı tarafından yüklenen orijinal görsel NFT";
+      }
+    } else {
+      if (!pixelatedImageHash) {
+        alert('Lütfen önce pixel art oluşturun');
+        return;
+      }
+      imageHash = pixelatedImageHash;
+      imageDescription = "Kullanıcı tarafından oluşturulan Pixel Art NFT";
+    }
+    
+    if (!imageHash) return;
 
     setIsMinting(true);
     
@@ -203,8 +283,8 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
           arguments: [
             tx.object(finalCollectionId),
             tx.pure.string(nftName),
-            tx.pure.string(nftDescription || "Kullanıcı tarafından oluşturulan Pixel Art NFT"),
-            tx.pure.string(getWorkingIpfsUrl(pixelatedImageHash)),
+            tx.pure.string(nftDescription || imageDescription),
+            tx.pure.string(getWorkingIpfsUrl(imageHash)),
           ],
         });
 
@@ -706,8 +786,70 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
         </Card>
       )}
 
+      {/* Mint Mode Selection */}
+      {imagePreview && (
+        <Card style={{ 
+          padding: "24px", 
+          background: "linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%)",
+          border: "1px solid rgba(16, 185, 129, 0.1)",
+          borderRadius: "20px",
+          boxShadow: "0 20px 60px rgba(16, 185, 129, 0.1)"
+        }}>
+          <Flex direction="column" gap="4">
+            <Text size="4" weight="medium" align="center" style={{ 
+              color: "#10b981",
+              marginBottom: "8px"
+            }}>
+              🎯 Mint Mode Seçin
+            </Text>
+            <Flex justify="center" gap="4" wrap="wrap">
+              <Button
+                variant={mintMode === 'original' ? 'solid' : 'outline'}
+                style={{
+                  background: mintMode === 'original' 
+                    ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
+                    : 'transparent',
+                  color: mintMode === 'original' ? 'white' : '#10b981',
+                  border: `2px solid ${mintMode === 'original' ? '#10b981' : '#10b981'}`,
+                  borderRadius: '12px',
+                  padding: '12px 24px',
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease'
+                }}
+                onClick={() => setMintMode('original')}
+              >
+                🖼️ Orijinal Resim (Yüksek Kalite)
+              </Button>
+              <Button
+                variant={mintMode === 'pixelated' ? 'solid' : 'outline'}
+                style={{
+                  background: mintMode === 'pixelated' 
+                    ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' 
+                    : 'transparent',
+                  color: mintMode === 'pixelated' ? 'white' : '#8b5cf6',
+                  border: `2px solid ${mintMode === 'pixelated' ? '#8b5cf6' : '#8b5cf6'}`,
+                  borderRadius: '12px',
+                  padding: '12px 24px',
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease'
+                }}
+                onClick={() => setMintMode('pixelated')}
+              >
+                🎨 Pixel Art (64x64)
+              </Button>
+            </Flex>
+            <Text size="2" color="gray" align="center" style={{ marginTop: "8px" }}>
+              {mintMode === 'original' 
+                ? 'Orijinal resminizi yüksek kalitede NFT olarak mintleyin' 
+                : 'Resminizi pixel art formatında NFT olarak mintleyin'
+              }
+            </Text>
+          </Flex>
+        </Card>
+      )}
+
       {/* NFT Metadata Form with Premium Design */}
-      {pixelStatus === 'success' && (
+      {imagePreview && (
         <Card style={{ 
           padding: "32px", 
           background: "linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.05) 100%)",
@@ -760,20 +902,24 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
 
             <Button
               onClick={handleMint}
-              disabled={!nftName.trim() || isMinting}
+              disabled={!nftName.trim() || isMinting || (mintMode === 'pixelated' && !pixelatedImageHash)}
               size="4"
-                              style={{
-                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                  border: "none",
-                  borderRadius: "16px",
-                  padding: "16px 32px",
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  marginTop: "24px",
-                  boxShadow: "0 20px 40px rgba(16, 185, 129, 0.3)",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  transform: "translateY(0)"
-                }}
+              style={{
+                background: mintMode === 'original' 
+                  ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                  : "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+                border: "none",
+                borderRadius: "16px",
+                padding: "16px 32px",
+                fontSize: "18px",
+                fontWeight: "600",
+                marginTop: "24px",
+                boxShadow: mintMode === 'original'
+                  ? "0 20px 40px rgba(16, 185, 129, 0.3)"
+                  : "0 20px 40px rgba(139, 92, 246, 0.3)",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                transform: "translateY(0)"
+              }}
             >
               {isMinting ? (
                 <>
@@ -783,7 +929,7 @@ export function NFTMinter({ onMinted }: NFTMinterProps) {
               ) : (
                 <>
                   <ImageIcon size={20} style={{ marginRight: "12px" }} />
-                  Mint Pixel Art NFT
+                  {mintMode === 'original' ? 'Mint Original Image NFT' : 'Mint Pixel Art NFT'}
                 </>
               )}
             </Button>
