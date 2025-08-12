@@ -28,13 +28,22 @@ export function SmartImage({
 
   // Check if this is an IPFS URL
   const isIpfsUrl = src.includes('ipfs/') || src.includes('gateway.pinata.cloud');
+  // Check if this is a local data URL (only for actual file uploads)
+  const isLocalDataUrl = src.startsWith('data:') && !src.includes('ipfs');
   
   useEffect(() => {
     setCurrentSrc(src);
     setHasError(false);
     setFallbackIndex(0);
-    setIsLoading(true);
-  }, [src]);
+    
+    // For local data URLs (file uploads), don't show loading state as they load immediately
+    // But keep loading state for IPFS URLs and other remote images
+    if (isLocalDataUrl) {
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+  }, [src, isLocalDataUrl]);
 
   const handleError = () => {
     if (!isIpfsUrl) {
